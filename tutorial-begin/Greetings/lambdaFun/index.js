@@ -1,8 +1,10 @@
 'use strict';
 var http = require('http');
+var debug_enabled = true;
 exports.handler = function (event, context) {
-    // TODO implement
-    //context.done(null, 'Hello from Lambda');
+    if(process.env.NODE_DEBUG)
+        console.log("Debug Enabled");
+
     try {
         var request = event.request;
         var session = event.session;
@@ -24,7 +26,8 @@ exports.handler = function (event, context) {
                         handleQuoteIntent(request,context,session);
                         break;
 
-                    case 'NextQuoteIntent':
+                    case 'NextQuoteIntent':                        
+                       
                         handleNextQuoteIntent(request,context,session);
                         break;
                     case 'AMAZON.CancelIntent':
@@ -35,7 +38,7 @@ exports.handler = function (event, context) {
                         }));
                     default:
                         throw "Unknown Intent : <<" + request.name + ">>";
-                        break;
+                        
                 }
                 /*if (request.intent.name === 'HelloIntent') {
                     handleHelloIntent(request, context);
@@ -58,6 +61,7 @@ exports.handler = function (event, context) {
     return context;
 };
 
+/* Get a random quote from Internet */
 function getQuote(callback) {
     var url = "http://api.forismatic.com/api/1.0/json?method=getQuote&lang=en&format=json";
     var req = http.get(url, function (response) {
@@ -84,7 +88,7 @@ function getGreeting() {
     let currentDate = new Date();
     let hour = currentDate.getUTCHours - 8;
     if (hour < 0)
-        hour = hour + 12.
+        hour = hour + 12;
 
     if (hour < 12)
         return "Good Morning. ";
@@ -110,11 +114,28 @@ function buildResponse(options) {
     if (options.repromptText) {
         response.response.reprompt = {
             "outputSpeech": {
-                "type": "PlainText",
-                "text": options.repromptText
+                "type": "SSML",
+                "text": "<speak>"+options.repromptText+"</speak>"
             }
         };
     }
+
+    if (options.cardTitle){
+        response.response.card={
+            type:"Simple",
+            title: options.cardTitle
+        };
+
+        if(options.imageUrl){
+            response.response.card.type = "Standard";
+            response.response.card.text = options.cardContent;
+            response.response.card.image = {
+                smallImageUrl: options.imageUrl,
+                largeImageUrl: options.imageUrl
+            };
+        }
+    }
+
 
     if (options.session && options.session.attributes){
         response.sessionAttributes = options.session.attributes;
@@ -139,14 +160,17 @@ function handleHelloIntent(request, context) {
     let options = {};
     options.speechText = `Hello <say-as interpret-as = "spell-out">${name}</say-as> ${name}. `;
     options.speechText += getGreeting();
+    
     getQuote(function (quote, err) {
         if (err) {
             context.fail(err);
         } else {
             options.speechText += quote;
+            options.cardContent = quote;
+            options.imageUrl = "https://commons.wikimedia.org/wiki/File:Hello_smile.png";            
         }
         context.succeed(buildResponse(options));
-        return context
+        return context;
     });
 }
 
@@ -169,22 +193,34 @@ function handleQuoteIntent(request,context,session){
 }
 
 function handleNextQuoteIntent(request, context, session){
+    let options = {};
+    options.session = session;
+    /*console.log("About to process handleNextQuoteIntent");
+    console.log('========== REQUEST=========');
+    console.log(JSON.stringify(request));
+    console.log('========== CONTEXT =========');
+    console.log(JSON.stringify(context));
+    console.log('========== SESSION =========');
+    console.log(JSON.stringify(session)); */
+
     //Check if the execution came here from Previous Quote Intent.
     if(session.attributes.quoteIntent){
         getQuote(function (quote, err) {
             if (err) {
                 context.fail(err);
-            } else {
+            } else {                                
                 options.speechText = quote;
                 options.speechText += ' Do you want to listen to another quote? ';
                 options.repromptText = 'You can say yes or one more.';
                 options.session.attributes.quoteIntent = true;
-                options.endSession = false;
+                options.endSession = false;               
                 context.succeed(buildResponse(options));
             }        
         });
     }else{
+        //console.log('Wrong invocation of NextQuoteIntent');
         options.speechText = "Wrong Invocation of this Intent";
         options.endSession = true;
+        context.succeed(buildResponse(options));
     }
 }
