@@ -40,12 +40,6 @@ exports.handler = function (event, context) {
                         throw "Unknown Intent : <<" + request.name + ">>";
                         
                 }
-                /*if (request.intent.name === 'HelloIntent') {
-                    handleHelloIntent(request, context);
-                
-                } else {
-                    throw "Unknown Intent : <<" + request.name + ">>";
-                }*/
                 break;
 
             case 'SessionEndedRequest':
